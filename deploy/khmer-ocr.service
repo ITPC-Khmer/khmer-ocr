@@ -7,6 +7,11 @@ User=www-data
 Group=www-data
 WorkingDirectory=/opt/khmer-ocr
 EnvironmentFile=-/opt/khmer-ocr/.env
+# Tesseract's OpenMP threading slows it down and hogs cores; single-thread it
+Environment=OMP_THREAD_LIMIT=1
+# Leave headroom for nginx/postgres/other sites on the box
+CPUQuota=200%
+Nice=5
 ExecStart=/opt/khmer-ocr/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=3
