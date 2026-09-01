@@ -9,10 +9,16 @@ import os
 import urllib.error
 import urllib.request
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+def _url() -> str:
+    return os.environ.get("OLLAMA_URL", "http://localhost:11434")
+
+
+def _model() -> str:
+    return os.environ.get("OLLAMA_MODEL", "gemma2:9b")
+
+
 # Only correct pages Tesseract itself is unsure about
-CORRECT_BELOW_CONFIDENCE = 85.0
+CORRECT_BELOW_CONFIDENCE = float(os.environ.get("CORRECT_BELOW_CONFIDENCE", "85"))
 TIMEOUT_SECONDS = 120
 
 _PROMPT = (
@@ -26,9 +32,9 @@ _PROMPT = (
 
 def ollama_available() -> bool:
     try:
-        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=2) as resp:
+        with urllib.request.urlopen(f"{_url()}/api/tags", timeout=2) as resp:
             models = json.load(resp).get("models", [])
-        return any(m.get("name", "").startswith(OLLAMA_MODEL) for m in models)
+        return any(m.get("name", "").startswith(_model()) for m in models)
     except (urllib.error.URLError, OSError, ValueError):
         return False
 
@@ -43,14 +49,14 @@ def correct_text(text: str, confidence: float = 0.0) -> str:
         return text
     payload = json.dumps(
         {
-            "model": OLLAMA_MODEL,
+            "model": _model(),
             "prompt": _PROMPT.format(text=text),
             "stream": False,
             "options": {"temperature": 0},
         }
     ).encode()
     req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/generate",
+        f"{_url()}/api/generate",
         data=payload,
         headers={"Content-Type": "application/json"},
     )

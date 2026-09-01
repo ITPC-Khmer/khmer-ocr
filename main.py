@@ -6,7 +6,10 @@ import asyncio
 import io
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+
+load_dotenv()
 from fastapi.responses import Response
 from PIL import Image, UnidentifiedImageError
 
