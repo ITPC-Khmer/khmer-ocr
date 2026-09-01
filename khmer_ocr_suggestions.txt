@@ -1,0 +1,167 @@
+KHMER OCR — FREE FOREVER, 100% LOCAL, SELF-HOSTED
+==================================================
+Goal: Khmer image → text, Khmer PDF → text / MS Word (.docx)
+Constraint: no paid APIs, no cloud, everything runs on YOUR server.
+Dev machine: macOS | Deploy target: Ubuntu 24.04 LTS
+
+------------------------------------------------------------
+1. THE STACK (ALL FREE & OPEN SOURCE)
+------------------------------------------------------------
+OCR engine #1: Tesseract 5 + khm traineddata (Apache 2.0)
+  - Fast, CPU-only, low RAM. Main workhorse.
+  - Use tessdata_best khm model for max accuracy.
+
+OCR engine #2 (fallback): EasyOCR (Apache 2.0)
+  - Deep-learning model with Khmer ('km') support.
+  - Better on photos/low-quality scans; slower on CPU.
+  - Run it only when Tesseract confidence is low.
+
+Optional local AI correction: Ollama + a small open model
+  (e.g. qwen2.5:7b or gemma2:9b — both handle Khmer reasonably)
+  - Post-corrects OCR mistakes offline. Needs ~8GB RAM (7B, q4).
+  - Skip this if your server is small; OCR works without it.
+
+PDF handling: PyMuPDF (extract text layer) + pdf2image/poppler (scanned)
+Word export:  python-docx
+Web API:      FastAPI + Uvicorn behind Nginx
+All of the above are free forever — no license fees, no API keys.
+
+------------------------------------------------------------
+2. UBUNTU 24.04 SERVER INSTALL (DEPLOY)
+------------------------------------------------------------
+# System packages
+sudo apt update
+sudo apt install -y tesseract-ocr tesseract-ocr-khm poppler-utils \
+                    python3-venv python3-pip nginx git
+
+# Best-quality Khmer model (replaces the default one)
+sudo wget -O /usr/share/tesseract-ocr/5/tessdata/khm.traineddata \
+  https://github.com/tesseract-ocr/tessdata_best/raw/main/khm.traineddata
+
+# Verify
+tesseract --list-langs        # must show: khm
+
+# App setup
+cd /opt && sudo git clone <your-repo> khmer-ocr && cd khmer-ocr
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Optional: EasyOCR (downloads Khmer model on first run, then offline)
+pip install easyocr
+
+# Optional: local LLM for correction
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5:7b
+
+------------------------------------------------------------
+3. requirements.txt
+------------------------------------------------------------
+fastapi
+uvicorn[standard]
+python-multipart
+pytesseract
+pillow
+opencv-python-headless        # headless = no GUI deps on server
+pdf2image
+pymupdf
+python-docx
+khmer-nltk                    # Khmer word segmentation
+# easyocr                     # uncomment if using fallback engine
+
+------------------------------------------------------------
+4. PIPELINE
+------------------------------------------------------------
+IMAGE → TEXT:
+  1. Load with Pillow/OpenCV
+  2. Preprocess: grayscale → denoise → adaptive threshold → deskew
+     → upscale so text height ≥ 30px (Khmer diacritics need detail)
+  3. text = pytesseract.image_to_string(img, lang='khm')
+     ('khm+eng' for mixed documents)
+  4. If avg confidence < ~60 (image_to_data) → retry with EasyOCR
+  5. unicodedata.normalize('NFC', text)
+
+PDF → TEXT:
+  1. Try PyMuPDF page.get_text() — digital PDFs need NO OCR
+  2. If empty → scanned PDF → pdf2image at dpi=300 → OCR each page
+
+TEXT → WORD (.docx):
+  from docx import Document
+  doc = Document()
+  style = doc.styles['Normal']
+  style.font.name = 'Noto Sans Khmer'   # install fonts-noto on server
+  doc.add_paragraph(text)
+  doc.save(out_path)
+  (sudo apt install -y fonts-noto — includes Noto Sans Khmer)
+
+OPTIONAL LLM CORRECTION (local, via Ollama):
+  POST http://localhost:11434/api/generate
+  prompt = "Fix OCR errors in this Khmer text, output only corrected
+            text:\n" + ocr_text
+  Only send low-confidence pages to keep it fast.
+
+------------------------------------------------------------
+5. FASTAPI SERVICE
+------------------------------------------------------------
+Endpoints:
+  POST /ocr/image?format=txt|docx    (upload png/jpg)
+  POST /ocr/pdf?format=txt|docx     (upload pdf)
+  GET  /health
+
+Run OCR in a worker thread/process pool — Tesseract is CPU-bound
+and will block the event loop otherwise:
+  text = await asyncio.to_thread(run_ocr, image)
+
+For big PDFs (100+ pages) add a simple job queue later
+(return job id, poll for result) — but start synchronous.
+
+------------------------------------------------------------
+6. PRODUCTION DEPLOY (systemd + nginx)
+------------------------------------------------------------
+/etc/systemd/system/khmer-ocr.service:
+  [Unit]
+  Description=Khmer OCR API
+  After=network.target
+  [Service]
+  User=www-data
+  WorkingDirectory=/opt/khmer-ocr
+  ExecStart=/opt/khmer-ocr/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2
+  Restart=always
+  [Install]
+  WantedBy=multi-user.target
+
+sudo systemctl enable --now khmer-ocr
+
+Nginx: reverse-proxy port 80/443 → 127.0.0.1:8000, and set
+  client_max_body_size 50M;   # allow big PDF uploads
+Free HTTPS: sudo apt install certbot python3-certbot-nginx
+
+------------------------------------------------------------
+7. SERVER SIZING (ALL CPU, NO GPU NEEDED)
+------------------------------------------------------------
+Tesseract only:            1–2 vCPU, 2GB RAM — fine
++ EasyOCR fallback:        2–4 vCPU, 4–8GB RAM
++ Ollama 7B correction:    4+ vCPU, 12–16GB RAM
+Tip: start Tesseract-only; add the others when accuracy demands it.
+
+------------------------------------------------------------
+8. KHMER-SPECIFIC NOTES
+------------------------------------------------------------
+- Khmer has no spaces between words → use khmer-nltk
+  word_tokenize() if you need word-level output.
+- Always 300+ DPI: stacked consonants (coeng) and vowel signs
+  above/below the line vanish at low resolution.
+- Normalize to NFC; strip zero-width spaces (U+200B) if unwanted.
+- Common confusions to post-correct: ប/ថ, ខ/ឃ, ោ/េា.
+- Accuracy too low later? Fine-tune Tesseract with tesstrain using
+  synthetic images from Khmer fonts (text2image) — still 100% free.
+
+------------------------------------------------------------
+9. BUILD ORDER
+------------------------------------------------------------
+  1. Local (mac): brew install tesseract tesseract-lang poppler
+  2. Prove OCR works on one test image (lang='khm')
+  3. Add PDF path (PyMuPDF first, pdf2image fallback)
+  4. Add .docx export
+  5. Wrap in FastAPI (main.py)
+  6. Deploy to Ubuntu 24.04 per section 2 & 6
+  7. Later: EasyOCR fallback → Ollama correction → job queue
