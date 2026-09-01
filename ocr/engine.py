@@ -10,7 +10,7 @@ from pathlib import Path
 import pytesseract
 from PIL import Image
 
-from .preprocess import preprocess, upscale_if_small
+from .preprocess import preprocess, preprocess_adaptive, upscale_if_small
 
 DEFAULT_LANG = "khm+eng"  # Khmer documents often contain Latin numbers/words
 RETRY_CONFIDENCE = 70.0
@@ -37,7 +37,9 @@ def ocr_image_conf(
     if conf < RETRY_CONFIDENCE:
         # psm 6 (uniform block) handles single lines / sparse pages better
         # than the default auto segmentation
-        for candidate in (gray, preprocess(pil_image)):
+        for make in (lambda: gray, lambda: preprocess(pil_image),
+                     lambda: preprocess_adaptive(pil_image)):
+            candidate = make()
             for psm in ("--psm 6", ""):
                 if candidate is gray and not psm:
                     continue  # already ran

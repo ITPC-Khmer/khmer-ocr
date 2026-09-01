@@ -26,6 +26,18 @@ def preprocess(pil_image: Image.Image) -> Image.Image:
     return Image.fromarray(img)
 
 
+def preprocess_adaptive(pil_image: Image.Image) -> Image.Image:
+    """Adaptive-threshold variant for photos with uneven lighting/shadows,
+    where global Otsu blacks out or washes away whole regions."""
+    img = np.array(upscale_if_small(pil_image.convert("L")))
+    img = cv2.bilateralFilter(img, 9, 75, 75)  # smooth noise, keep edges
+    img = cv2.adaptiveThreshold(
+        img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
+    )
+    img = _deskew(img)
+    return Image.fromarray(img)
+
+
 def _deskew(img: np.ndarray) -> np.ndarray:
     # Estimate skew from the minimum-area rectangle around dark pixels
     inverted = 255 - img

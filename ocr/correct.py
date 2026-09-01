@@ -41,7 +41,9 @@ def ollama_available() -> bool:
 
 def correct_text(text: str, confidence: float = 0.0) -> str:
     """Return LLM-corrected text, or the input unchanged on any failure."""
-    if os.environ.get("OLLAMA_CORRECT", "1") == "0":
+    # Off by default: LLM correction is too slow on small servers.
+    # Set OLLAMA_CORRECT=1 to re-enable.
+    if os.environ.get("OLLAMA_CORRECT", "0") != "1":
         return text
     if not text.strip() or confidence >= CORRECT_BELOW_CONFIDENCE:
         return text
