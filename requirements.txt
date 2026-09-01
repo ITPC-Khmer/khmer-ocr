@@ -7,3 +7,4 @@ pillow
 opencv-python-headless
 pymupdf
 python-docx
+psycopg[binary]
