@@ -4,9 +4,8 @@ Ollama running on the khmer-ocr server (152.42.210.186), exposed via
 nginx + Let's Encrypt at https://ai.sothea.us.
 Installed model: gemma2:9b (CPU only, 4 vCPU — expect slow generation).
 
-WARNING: the endpoint is PUBLIC with NO authentication. Anyone who
-finds the URL can run generations or pull/delete models. Consider
-adding nginx basic auth or an IP allowlist.
+Protected with HTTP Basic Auth (nginx). Username: ai — ask the admin
+for the password. Pass it with curl -u ai:PASSWORD or in the client.
 
 NOTE: requests proxied through Cloudflare are cut off at ~100 seconds.
 Long generations should use stream:true (streaming keeps the
@@ -16,13 +15,13 @@ connection alive), or call the server directly from inside the box
 ------------------------------------------------------------
 1. CHECK STATUS / LIST MODELS
 ------------------------------------------------------------
-curl https://ai.sothea.us/                # "Ollama is running"
-curl https://ai.sothea.us/api/tags        # installed models
+curl -u ai:PASSWORD https://ai.sothea.us/            # "Ollama is running"
+curl -u ai:PASSWORD https://ai.sothea.us/api/tags    # installed models
 
 ------------------------------------------------------------
 2. GENERATE (one-shot prompt)
 ------------------------------------------------------------
-curl https://ai.sothea.us/api/generate -d '{
+curl -u ai:PASSWORD https://ai.sothea.us/api/generate -d '{
   "model": "gemma2:9b",
   "prompt": "Why is the sky blue?",
   "stream": false
@@ -34,7 +33,7 @@ curl https://ai.sothea.us/api/generate -d '{
 ------------------------------------------------------------
 3. CHAT (multi-turn)
 ------------------------------------------------------------
-curl https://ai.sothea.us/api/chat -d '{
+curl -u ai:PASSWORD https://ai.sothea.us/api/chat -d '{
   "model": "gemma2:9b",
   "messages": [
     {"role": "user", "content": "សួស្តី! ជួយប្រែសម្រួលអត្ថបទនេះ..."}
@@ -47,7 +46,7 @@ curl https://ai.sothea.us/api/chat -d '{
 ------------------------------------------------------------
 import requests
 
-r = requests.post("https://ai.sothea.us/api/generate", json={
+r = requests.post("https://ai.sothea.us/api/generate", auth=("ai", "PASSWORD"), json={
     "model": "gemma2:9b",
     "prompt": "Fix OCR errors in this Khmer text: ...",
     "stream": False,
@@ -57,7 +56,7 @@ print(r.json()["response"])
 
 # Or with the official client:  pip install ollama
 from ollama import Client
-client = Client(host="https://ai.sothea.us")
+client = Client(host="https://ai.sothea.us", auth=("ai", "PASSWORD"))
 print(client.generate(model="gemma2:9b", prompt="hello").response)
 
 ------------------------------------------------------------
