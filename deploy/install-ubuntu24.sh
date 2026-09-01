@@ -31,4 +31,11 @@ ln -sf /etc/nginx/sites-available/khmer-ocr /etc/nginx/sites-enabled/khmer-ocr
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
+# Ollama + local correction model
+if ! command -v ollama >/dev/null; then
+  curl -fsSL https://ollama.com/install.sh | sh
+fi
+systemctl enable --now ollama
+ollama pull gemma2:9b
+
 echo "Done. Test: curl localhost/health"
