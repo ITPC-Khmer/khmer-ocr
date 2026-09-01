@@ -93,13 +93,17 @@ async def job_status(job_id: str):
 
 
 @app.get("/jobs/{job_id}/result")
-async def job_result(job_id: str):
+async def job_result(
+    job_id: str,
+    format: str | None = Query(None, pattern="^(txt|docx|json)$"),
+):
+    """Fetch a finished job's text. `format` overrides the one set at submit."""
     job = await asyncio.to_thread(_get_job, job_id)
     if job["status"] == "error":
         raise HTTPException(422, f"Could not process PDF: {job['error']}")
     if job["status"] != "done":
         raise HTTPException(409, f"Job not finished (status: {job['status']})")
-    return _respond(job["result"] or "", job["format"], job["filename"])
+    return _respond(job["result"] or "", format or job["format"], job["filename"])
 
 
 def _get_job(job_id: str) -> dict:
